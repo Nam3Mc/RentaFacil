@@ -7,18 +7,357 @@ datasource db {
   provider = "postgresql"
 }
 
-model User { 
-  id    Int     @id @default(autoincrement()) 
-  email String  @unique
-  name  String?
-  posts Post[]
-} 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
 
-model Post { 
-  id        Int     @id @default(autoincrement()) 
-  title     String
-  content   String?
-  published Boolean @default(false) 
-  author    User    @relation(fields: [authorId], references: [id]) 
-  authorId  Int
-} 
+enum UserRole {
+  guest
+  owner
+  admin
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  expired
+}
+
+enum PropertyStatus {
+  pending_verification
+  approved
+  active
+  paused
+  rejected
+}
+
+enum ContractStatus {
+  pending
+  active
+  completed
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum PaymentMethod {
+  crypto
+  fiat
+}
+
+enum ConversationStatus {
+  open
+  closed
+}
+
+enum ContentType {
+  text
+  image
+  document
+}
+
+enum MessageStatus {
+  sent
+  delivered
+  read
+}
+
+enum DisputeStatus {
+  open
+  in_review
+  resolved
+  closed
+}
+
+enum DisputeResolution {
+  owner_favor
+  guest_favor
+  split
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  user_id           String   @id @default(uuid()) @db.Char(36)
+  fname        String   @db.VarChar(45)
+  lname        String   @db.VarChar(45)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         UserRole @default(guest)
+  phone        String?  @db.VarChar(20)
+  isTokenized  Boolean  @default(false) @map("is_tokenized")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+
+  wallet             Wallet?
+  subscription       Subscription?
+  properties         Property[]
+  contractsAsOwner   Contract[]     @relation("OwnerContracts")
+  contractsAsGuest   Contract[]     @relation("GuestContracts")
+  sentMessages       Message[]
+  conversationsOwner Conversation[] @relation("OwnerConversations")
+  conversationsGuest Conversation[] @relation("GuestConversations")
+  reviews            Review[]
+  disputesOpened     Dispute[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WALLET
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Wallet {
+  wallet_id      String @id @default(uuid()) @db.Char(36)
+  address String @db.VarChar(255)
+  network String @db.VarChar(50)
+  userId  String @unique @map("user_id") @db.Char(36)
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  payments Payment[]
+
+  @@map("wallets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAN
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Plan {
+  plan_id       String  @id @default(uuid()) @db.Char(36)
+  name          String  @db.VarChar(50)
+  monthlyPrice  Decimal @map("monthly_price") @db.Decimal(10, 2)
+  annualPrice   Decimal @map("annual_price") @db.Decimal(10, 2)
+  commissionPct Decimal @map("commission_pct") @db.Decimal(5, 2)
+  maxProperties Int?    @map("max_properties")
+  features      Json
+  active        Boolean @default(true)
+
+  // Relations
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSCRIPTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Subscription {
+  model_id  String             @id @default(uuid()) @db.Char(36)
+  userId    String             @unique @map("user_id") @db.Char(36)
+  planId    String             @map("plan_id") @db.Char(36)
+  status    SubscriptionStatus @default(active)
+  billing   String             @db.VarChar(10) // "monthly" | "annual"
+  startDate DateTime           @map("start_date")
+  endDate   DateTime           @map("end_date")
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [plan_id])
+
+  @@map("subscriptions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROPERTY
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Property {
+  property_id   String         @id @default(uuid()) @db.Char(36)
+  ownerId       String         @map("user_id") @db.Char(36)
+  name          String         @map("property_name") @db.VarChar(255)
+  description   String         @db.Text
+  address       String         @db.VarChar(255)
+  latitude      Decimal?       @db.Decimal(10, 8)
+  longitude     Decimal?       @db.Decimal(11, 8)
+  priceMonthly  Decimal        @map("price_monthly") @db.Decimal(12, 2)
+  status        PropertyStatus @default(pending_verification)
+  amenities     Json           @default("[]")
+  images        Json           @default("[]")
+  blockedDates  Json           @default("[]") @map("blocked_dates")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  owner         User           @relation(fields: [ownerId], references: [user_id], onDelete: Cascade)
+  contracts     Contract[]
+  conversations Conversation[]
+  reviews       Review[]
+  documents     PropertyDocument[]
+
+  @@map("properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROPERTY DOCUMENT
+// Documentos de verificación y documentos para inquilinos
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PropertyDocument {
+  property_document_id  String   @id @default(uuid()) @db.Char(36)
+  propertyId String     @map("property_id") @db.Char(36)
+  label      String     @db.VarChar(100)
+  type       String     @db.VarChar(50) // "verification" | "rental"
+  fileUrl    String     @map("file_url") @db.VarChar(500)
+  required   Boolean    @default(false)
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [property_id], onDelete: Cascade)
+
+  @@map("property_documents")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTRACT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Contract {
+  contract_id    String         @id @default(uuid()) @db.Char(36)
+  propertyId     String         @map("property_id") @db.Char(36)
+  ownerId        String         @map("owner_id") @db.Char(36)
+  guestId        String         @map("guest_id") @db.Char(36)
+  startDate      DateTime       @map("start_date") @db.Date
+  endDate        DateTime       @map("end_date") @db.Date
+  durationMonths Int            @map("duration_months")
+  pricePerMonth  Decimal        @map("price_per_month") @db.Decimal(12, 2)
+  status         ContractStatus @default(pending)
+  txHash         String?        @map("tx_hash") @db.VarChar(255)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  property      Property       @relation(fields: [propertyId], references: [property_id])
+  owner         User           @relation("OwnerContracts", fields: [ownerId], references: [user_id])
+  guest         User           @relation("GuestContracts", fields: [guestId], references: [user_id])
+  payments      Payment[]
+  conversations Conversation[]
+  disputes      Dispute[]
+
+  @@map("contracts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Payment {
+  payment_id    String        @id @default(uuid()) @db.Char(36)
+  contractId    String        @map("contract_id") @db.Char(36)
+  walletId      String?       @map("wallet_id") @db.Char(36)
+  total         Decimal       @db.Decimal(12, 2)
+  commission    Decimal       @db.Decimal(12, 2)
+  status        PaymentStatus @default(pending)
+  paymentMethod PaymentMethod @map("payment_method")
+  description   String?       @db.Text
+  txHash        String?       @map("tx_hash") @db.VarChar(255)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  contract Contract @relation(fields: [contractId], references: [contract_id])
+  wallet   Wallet?  @relation(fields: [walletId], references: [wallet_id])
+
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONVERSATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Conversation {
+  conversation_id String             @id @default(uuid()) @db.Char(36)
+  propertyId      String             @map("property_id") @db.Char(36)
+  contractId      String?            @map("contract_id") @db.Char(36)
+  ownerId         String             @map("owner_id") @db.Char(36)
+  guestId         String             @map("guest_id") @db.Char(36)
+  status          ConversationStatus @default(open)
+  lastMessageAt   DateTime?          @map("last_message_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  property Property  @relation(fields: [propertyId], references: [property_id])
+  contract Contract? @relation(fields: [contractId], references: [contract_id])
+  owner    User      @relation("OwnerConversations", fields: [ownerId], references: [user_id])
+  guest    User      @relation("GuestConversations", fields: [guestId], references: [user_id])
+  messages Message[]
+
+  @@unique([propertyId, guestId])
+  @@map("conversations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MESSAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Message {
+  id             String        @id @default(uuid()) @db.Char(36)
+  conversationId String        @map("conversation_id") @db.Char(36)
+  senderId       String        @map("sender_id") @db.Char(36)
+  content        String        @db.Text
+  contentType    ContentType   @default(text) @map("content_type")
+  mediaUrl       String?       @map("media_url") @db.VarChar(500)
+  status         MessageStatus @default(sent)
+  sentAt         DateTime      @default(now()) @map("sent_at")
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [conversation_id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [user_id])
+
+  @@map("messages")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REVIEW
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Review {
+  id         String   @id @default(uuid()) @db.Char(36)
+  propertyId String   @map("property_id") @db.Char(36)
+  userId     String   @map("user_id") @db.Char(36)
+  rate       Int      
+  reviewText String   @map("review_text") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [property_id])
+  user     User     @relation(fields: [userId], references: [user_id])
+
+  @@unique([propertyId, userId])
+  @@map("reviews")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPUTE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Dispute {
+  id          String             @id @default(uuid()) @db.Char(36)
+  contractId  String             @map("contract_id") @db.Char(36)
+  openedById  String             @map("opened_by") @db.Char(36)
+  reason      String             @db.VarChar(255)
+  description String             @db.Text
+  status      DisputeStatus      @default(open)
+  resolution  DisputeResolution?
+  adminNotes  String?            @map("admin_notes") @db.Text
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  contract Contract @relation(fields: [contractId], references: [contract_id])
+  openedBy User     @relation(fields: [openedById], references: [user_id])
+
+  @@map("disputes")
+}
