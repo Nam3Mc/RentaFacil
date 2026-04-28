@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const createUserSchema = z.object({
+export const CreateUserSchema = z.object({
         fname: z
             .string()
             .min(2, 'Description')
@@ -22,4 +22,4 @@ export const createUserSchema = z.object({
             .enum(['guest', 'owner', 'admin']),
     })
 
-export type CreateUserDto = z.infer<typeof createUserSchema>
+export type CreateUserDto = z.infer<typeof CreateUserSchema>

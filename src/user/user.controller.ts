@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UsePipes } from '@nestjs/common';
 import { UserService } from './user.service.js';
-import { createUserSchema } from './schemas/create-user.schema.js';
+import { CreateUserSchema } from './schemas/create-user.schema.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { updateUserSchema } from './schemas/update-user.schema.js';
 import { ApiBody } from '@nestjs/swagger';
@@ -12,9 +12,9 @@ export class UserController {
 
   @Post()
   @ApiBody({type: CreateUserDto})
-  @UsePipes( new ZodValidationPipe( createUserSchema))
-  create(@Body() body) {
-    return body
+  @UsePipes( new ZodValidationPipe( CreateUserSchema))
+  create(@Body() body: CreateUserDto) {
+    return this.userService.create(body)
   }
 
   // @Get()
@@ -37,4 +37,4 @@ export class UserController {
   // remove(@Param('id') id: string) {
     // return this.userService.remove(+id);
   // }
-}
+} 

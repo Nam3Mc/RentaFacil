@@ -1,10 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateUserDto } from './schemas/create-user.schema.js';
-import { updateUserSchema } from './schemas/update-user.schema.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { HashPassword } from '../common/utils/hash.util.js';
+
+
 @Injectable()
 export class UserService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
+
+  constructor (private prisma: PrismaService) {}
+
+  async create( data: CreateUserDto) {
+    const password = await HashPassword(data.password)
+    return password
   }
 
   findAll() {
