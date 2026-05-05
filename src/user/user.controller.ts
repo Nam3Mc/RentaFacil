@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UsePipes } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UsePipes, ParseUUIDPipe } from '@nestjs/common';
 import { UserService } from './user.service.js';
 import { CreateUserSchema } from './schemas/create-user.schema.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
@@ -17,14 +17,15 @@ export class UserController {
     return this.userService.create(body)
   }
 
-  // @Get()
-  // findAll() {
-    // return this.userService.findAll();
-  // }
+  @Get()
+  findAll() {
+    return this.userService.findAll();
+  }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+  @UsePipes()
+  findOne(@Param('id', new ParseUUIDPipe()) id: string)  {
+    return this.userService.findOne(id);
   }
 
   @Patch(':id')
